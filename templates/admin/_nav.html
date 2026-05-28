@@ -1,0 +1,8 @@
+{% macro admin_nav(active='') %}
+<div class="admin-nav">
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline {{ 'active' if active == 'dashboard' }}">仪表盘</a>
+    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline {{ 'active' if active == 'schedules' }}">班次管理</a>
+    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline {{ 'active' if active == 'orders' }}">订单管理</a>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline {{ 'active' if active == 'users' }}">用户管理</a>
+</div>
+{% endmacro %}

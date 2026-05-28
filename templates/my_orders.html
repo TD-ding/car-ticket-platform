@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_pagination.html" import render_pagination %}
+
 {% block title %}我的订单 - 汽车订票平台{% endblock %}
 
 {% block content %}
@@ -28,7 +30,7 @@
             <td>{{ order.passenger_name }}</td>
             <td>{{ order.passenger_phone }}</td>
             <td>{{ order.seat_number }}</td>
-            <td>¥{{ order.schedule.price }}</td>
+            <td>¥{{ order.price }}</td>
             <td>
                 <span class="badge badge-{{ 'success' if order.order_status == 'paid' else ('warning' if order.order_status == 'used' else 'danger') }}">
                     {{ {'paid': '已支付', 'used': '已使用', 'cancelled': '已取消'}.get(order.order_status, order.order_status) }}
@@ -38,6 +40,7 @@
                 {% if order.order_status == 'paid' %}
                 <form method="post" action="{{ url_for('cancel_order', order_id=order.id) }}"
                       onsubmit="return confirm('确定要取消该订单吗？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-sm btn-danger">取消</button>
                 </form>
                 {% endif %}
@@ -46,6 +49,7 @@
         {% endfor %}
     </tbody>
 </table>
+{{ render_pagination(pagination) }}
 {% else %}
 <p class="text-center">暂无订单，去<a href="{{ url_for('index') }}">首页</a>看看吧</p>
 {% endif %}

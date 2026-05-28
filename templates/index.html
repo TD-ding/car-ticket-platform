@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_pagination.html" import render_pagination %}
+
 {% block title %}汽车订票平台 - 首页{% endblock %}
 
 {% block content %}
@@ -34,6 +36,7 @@
     </div>
     {% endfor %}
 </div>
+{{ render_pagination(pagination) }}
 {% else %}
 <p class="text-center">暂无可预订班次</p>
 {% endif %}

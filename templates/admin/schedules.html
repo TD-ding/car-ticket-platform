@@ -1,14 +1,12 @@
 {% extends "base.html" %}
+{% from "admin/_nav.html" import admin_nav %}
+{% from "_pagination.html" import render_pagination %}
+
 {% block title %}班次管理 - 管理后台{% endblock %}
 
 {% block content %}
 <h2>班次管理</h2>
-<div class="admin-nav">
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline">仪表盘</a>
-    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline active">班次管理</a>
-    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline">订单管理</a>
-    <a href="{{ url_for('admin_users') }}" class="btn btn-outline">用户管理</a>
-</div>
+{{ admin_nav(active='schedules') }}
 
 <div class="toolbar">
     <a href="{{ url_for('admin_schedule_new') }}" class="btn btn-primary">+ 添加班次</a>
@@ -49,6 +47,7 @@
                 {% if s.status == 'active' %}
                 <form method="post" action="{{ url_for('admin_schedule_cancel', schedule_id=s.id) }}"
                       onsubmit="return confirm('确定要取消该班次吗？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-sm btn-danger">取消</button>
                 </form>
                 {% endif %}
@@ -57,6 +56,7 @@
         {% endfor %}
     </tbody>
 </table>
+{{ render_pagination(pagination) }}
 {% else %}
 <p class="text-center">暂无班次</p>
 {% endif %}

@@ -1,5 +1,5 @@
 """Seed the database with sample data."""
-from app import app, db
+from app import app, db, _migrate_db
 from models import User, Schedule, Order
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
@@ -13,7 +13,7 @@ PLACES = [
 
 def seed():
     with app.app_context():
-        db.create_all()
+        _migrate_db()
 
         # Admin user
         if not User.query.filter_by(username="admin").first():
