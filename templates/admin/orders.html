@@ -8,6 +8,42 @@
 <h2>订单管理</h2>
 {{ admin_nav(active='orders') }}
 
+<form method="get" action="{{ url_for('admin_orders') }}" class="search-form-card">
+    <div class="form-row">
+        <div class="form-group">
+            <label>关键词</label>
+            <input type="text" name="keyword" value="{{ keyword }}" placeholder="用户名/乘车人/手机号/城市">
+        </div>
+        <div class="form-group">
+            <label>状态</label>
+            <select name="status">
+                <option value="">全部</option>
+                <option value="paid" {{ 'selected' if order_status == 'paid' }}>已支付</option>
+                <option value="used" {{ 'selected' if order_status == 'used' }}>已使用</option>
+                <option value="cancelled" {{ 'selected' if order_status == 'cancelled' }}>已取消</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>下单日期 从</label>
+            <input type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="form-group">
+            <label>到</label>
+            <input type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="form-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary">筛选</button>
+            <a href="{{ url_for('admin_orders') }}" class="btn btn-outline btn-sm">重置</a>
+        </div>
+    </div>
+</form>
+
+<div class="toolbar">
+    <a href="{{ url_for('admin_orders_export', status=order_status, date_from=date_from, date_to=date_to) }}"
+       class="btn btn-outline">导出CSV</a>
+</div>
+
 {% if orders %}
 <div class="table-responsive"><table class="table">
     <thead>

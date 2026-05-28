@@ -8,6 +8,40 @@
 <h2>班次管理</h2>
 {{ admin_nav(active='schedules') }}
 
+<form method="get" action="{{ url_for('admin_schedules') }}" class="search-form-card">
+    <div class="form-row">
+        <div class="form-group">
+            <label>出发地</label>
+            <input type="text" name="departure" value="{{ departure }}" placeholder="筛选出发地">
+        </div>
+        <div class="form-group">
+            <label>目的地</label>
+            <input type="text" name="destination" value="{{ destination }}" placeholder="筛选目的地">
+        </div>
+        <div class="form-group">
+            <label>状态</label>
+            <select name="status">
+                <option value="">全部</option>
+                <option value="active" {{ 'selected' if status == 'active' }}>正常</option>
+                <option value="cancelled" {{ 'selected' if status == 'cancelled' }}>已取消</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>出发日期 从</label>
+            <input type="date" name="date_from" value="{{ date_from }}">
+        </div>
+        <div class="form-group">
+            <label>到</label>
+            <input type="date" name="date_to" value="{{ date_to }}">
+        </div>
+        <div class="form-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary">筛选</button>
+            <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline btn-sm">重置</a>
+        </div>
+    </div>
+</form>
+
 <div class="toolbar">
     <a href="{{ url_for('admin_schedule_new') }}" class="btn btn-primary">+ 添加班次</a>
 </div>
@@ -44,6 +78,11 @@
             </td>
             <td class="actions">
                 <a href="{{ url_for('admin_schedule_edit', schedule_id=s.id) }}" class="btn btn-sm btn-outline">编辑</a>
+                <form method="post" action="{{ url_for('admin_schedule_copy', schedule_id=s.id) }}"
+                      onsubmit="return confirm('确定要复制该班次吗？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-primary">复制</button>
+                </form>
                 {% if s.status == 'active' %}
                 <form method="post" action="{{ url_for('admin_schedule_cancel', schedule_id=s.id) }}"
                       onsubmit="return confirm('确定要取消该班次吗？')">

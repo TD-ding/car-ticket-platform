@@ -18,6 +18,8 @@
                 <a href="{{ url_for('search') }}">查询班次</a>
                 {% if current_user.is_authenticated %}
                     <a href="{{ url_for('my_orders') }}">我的订单</a>
+                    <a href="{{ url_for('my_waitlist') }}">候补队列</a>
+                    <a href="{{ url_for('my_favorites') }}">我的收藏</a>
                     {% if current_user.is_admin %}
                         <a href="{{ url_for('admin_dashboard') }}">管理后台</a>
                     {% endif %}

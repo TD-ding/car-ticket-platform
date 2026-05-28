@@ -3,7 +3,17 @@
 
 {% block content %}
 <div class="detail-card">
-    <h2>{{ schedule.departure }} → {{ schedule.destination }}</h2>
+    <div class="detail-header">
+        <h2>{{ schedule.departure }} → {{ schedule.destination }}</h2>
+        {% if current_user.is_authenticated %}
+        <form method="post" action="{{ url_for('toggle_favorite', schedule_id=schedule.id) }}" class="inline-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <button type="submit" class="btn btn-sm {{ 'btn-warning' if is_favorited else 'btn-outline' }}">
+                {{ '★ 已收藏' if is_favorited else '☆ 收藏' }}
+            </button>
+        </form>
+        {% endif %}
+    </div>
     <div class="detail-grid">
         <div class="detail-item">
             <label>出发时间</label>
@@ -35,6 +45,11 @@
         <a href="{{ url_for('book', schedule_id=schedule.id) }}" class="btn btn-primary btn-lg mt-2">
             立即订票
         </a>
+    {% elif schedule.available_seats <= 0 and schedule.status == 'active' and current_user.is_authenticated %}
+        <a href="{{ url_for('join_waitlist', schedule_id=schedule.id) }}" class="btn btn-warning btn-lg mt-2">
+            候补订票
+        </a>
+        <span class="text-danger ml-1">该班次已售罄，可排队候补</span>
     {% elif schedule.available_seats <= 0 %}
         <button class="btn btn-disabled" disabled>已售罄</button>
     {% endif %}

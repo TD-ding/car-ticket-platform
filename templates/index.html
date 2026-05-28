@@ -16,6 +16,18 @@
     </form>
 </div>
 
+{% if popular_routes %}
+<h2 class="section-title">热门路线</h2>
+<div class="popular-routes">
+    {% for route in popular_routes %}
+    <a href="{{ url_for('search', departure=route.departure, destination=route.destination) }}" class="route-card">
+        <div class="route-name">{{ route.departure }} → {{ route.destination }}</div>
+        <div class="route-orders">{{ route.order_count }} 人已购票</div>
+    </a>
+    {% endfor %}
+</div>
+{% endif %}
+
 <h2 class="section-title">近期班次</h2>
 {% if schedules %}
 <div class="schedule-list">

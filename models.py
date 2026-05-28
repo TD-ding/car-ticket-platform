@@ -18,6 +18,8 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     orders = db.relationship("Order", backref="user", lazy=True)
+    favorites = db.relationship("Favorite", backref="user", lazy=True,
+                                cascade="all, delete-orphan")
 
 
 class Schedule(db.Model):
@@ -34,6 +36,11 @@ class Schedule(db.Model):
     status = db.Column(db.String(20), default="active")  # active / cancelled
 
     orders = db.relationship("Order", backref="schedule", lazy=True)
+    waitlist_entries = db.relationship("Waitlist", backref="schedule", lazy=True,
+                                       cascade="all, delete-orphan",
+                                       order_by="Waitlist.created_at")
+    favorites = db.relationship("Favorite", backref="schedule", lazy=True,
+                                cascade="all, delete-orphan")
 
 
 class Order(db.Model):
@@ -48,3 +55,32 @@ class Order(db.Model):
     price = db.Column(db.Float, nullable=False, default=0)
     order_status = db.Column(db.String(20), default="paid")  # paid / cancelled / used
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class Waitlist(db.Model):
+    __tablename__ = "waitlist"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=False)
+    passenger_name = db.Column(db.String(80), nullable=False)
+    passenger_phone = db.Column(db.String(20), nullable=False)
+    status = db.Column(db.String(20), default="waiting")  # waiting / fulfilled / cancelled
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.Index("ix_waitlist_schedule_status", "schedule_id", "status"),
+    )
+
+
+class Favorite(db.Model):
+    __tablename__ = "favorites"
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+    schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        db.UniqueConstraint("user_id", "schedule_id", name="uq_user_schedule"),
+    )
