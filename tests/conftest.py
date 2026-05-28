@@ -1,21 +1,26 @@
+import os
 import pytest
-from app import app as flask_app, db as _db
-from models import User, Schedule
-from werkzeug.security import generate_password_hash
-from datetime import datetime, timedelta
+
+# Set DATABASE_URL to in-memory BEFORE importing the app module,
+# so Flask-SQLAlchemy never tries to open a file-based SQLite.
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+
+from app import app as flask_app, db as _db  # noqa: E402
+from models import User, Schedule  # noqa: E402
+from werkzeug.security import generate_password_hash  # noqa: E402
+from datetime import datetime, timedelta  # noqa: E402
 
 
 @pytest.fixture()
 def app():
     flask_app.config["TESTING"] = True
     flask_app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///:memory:"
-    flask_app.config["WTF_CSRF_ENABLED"] = False
     flask_app.config["SECRET_KEY"] = "test-secret-key"
 
     with flask_app.app_context():
         _db.create_all()
         yield flask_app
-        _db.session.remove()
+        _db.session.rollback()
         _db.drop_all()
 
 
