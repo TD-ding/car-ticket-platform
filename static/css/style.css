@@ -206,12 +206,18 @@ a:hover { color: #3451d1; }
     display: flex;
     justify-content: space-between;
     align-items: center;
-    cursor: pointer;
+    color: inherit;
     transition: transform .15s, box-shadow .15s;
 }
-.schedule-card:hover {
+.schedule-card:hover, .schedule-card:focus {
     transform: translateY(-2px);
     box-shadow: 0 4px 16px rgba(0,0,0,.1);
+    color: inherit;
+    text-decoration: none;
+}
+.schedule-card:focus {
+    outline: 2px solid #4a6cf7;
+    outline-offset: 2px;
 }
 
 .schedule-route {
@@ -270,6 +276,48 @@ a:hover { color: #3451d1; }
     margin-bottom: 1.5rem;
 }
 
+/* ── Booking Success ────────────────────────────────────────────────────────── */
+.success-card {
+    max-width: 600px;
+    margin: 0 auto;
+    background: #fff;
+    padding: 2.5rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.08);
+    text-align: center;
+}
+.success-icon {
+    width: 64px;
+    height: 64px;
+    background: #27ae60;
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 auto 1rem;
+}
+.success-card h2 {
+    color: #27ae60;
+    margin-bottom: 1.5rem;
+}
+.success-detail {
+    text-align: left;
+    margin-bottom: 1.5rem;
+}
+.seat-number {
+    color: #4a6cf7;
+    font-size: 1.3rem;
+    font-weight: 700;
+}
+.success-actions {
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+}
+
 /* ── Badge ──────────────────────────────────────────────────────────────────── */
 .badge {
     display: inline-block;
@@ -285,19 +333,25 @@ a:hover { color: #3451d1; }
 .badge-secondary { background: #e9ecef; color: #495057; }
 
 /* ── Table ──────────────────────────────────────────────────────────────────── */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border-radius: 10px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+}
+
 .table {
     width: 100%;
     border-collapse: collapse;
     background: #fff;
-    border-radius: 10px;
-    overflow: hidden;
-    box-shadow: 0 2px 12px rgba(0,0,0,.06);
+    min-width: 700px;
 }
 .table th, .table td {
     padding: .75rem 1rem;
     text-align: left;
     font-size: .9rem;
     border-bottom: 1px solid #eee;
+    white-space: nowrap;
 }
 .table th {
     background: #f8f9fa;
@@ -406,7 +460,6 @@ a:hover { color: #3451d1; }
     .search-form-inline input { width: 100%; }
     .schedule-card { flex-direction: column; gap: .5rem; align-items: flex-start; }
     .schedule-meta { flex-wrap: wrap; }
-    .table { font-size: .8rem; }
-    .table th, .table td { padding: .5rem; }
     .detail-grid { grid-template-columns: 1fr 1fr; }
+    .success-actions { flex-direction: column; }
 }

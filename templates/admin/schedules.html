@@ -13,7 +13,7 @@
 </div>
 
 {% if schedules %}
-<table class="table">
+<div class="table-responsive"><table class="table">
     <thead>
         <tr>
             <th>ID</th>
@@ -55,7 +55,7 @@
         </tr>
         {% endfor %}
     </tbody>
-</table>
+</table></div>
 {{ render_pagination(pagination) }}
 {% else %}
 <p class="text-center">暂无班次</p>

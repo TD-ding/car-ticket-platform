@@ -71,6 +71,37 @@ def _escape_like(s):
     return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
+def _validate_schedule_form(form, schedule=None):
+    errors = []
+    try:
+        dep_time = datetime.strptime(form["departure_time"], "%Y-%m-%dT%H:%M")
+    except (ValueError, KeyError):
+        errors.append("出发时间格式不正确")
+        dep_time = None
+    try:
+        arr_time = datetime.strptime(form["arrival_time"], "%Y-%m-%dT%H:%M")
+    except (ValueError, KeyError):
+        errors.append("到达时间格式不正确")
+        arr_time = None
+    if dep_time and arr_time and arr_time <= dep_time:
+        errors.append("到达时间必须晚于出发时间")
+    try:
+        price = float(form["price"])
+        if price <= 0:
+            errors.append("票价必须大于0")
+    except (ValueError, KeyError):
+        errors.append("票价格式不正确")
+        price = None
+    try:
+        total = int(form.get("total_seats", 40))
+        if total <= 0:
+            errors.append("座位数必须大于0")
+    except (ValueError, KeyError):
+        errors.append("座位数格式不正确")
+        total = None
+    return errors
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 @app.route("/register", methods=["GET", "POST"])
@@ -187,12 +218,24 @@ def schedule_detail(schedule_id):
 @app.route("/book/<int:schedule_id>", methods=["GET", "POST"])
 @login_required
 def book(schedule_id):
+    schedule = db.session.get(Schedule, schedule_id)
+    if not schedule or schedule.status != "active":
+        flash("该班次不可预订", "danger")
+        return redirect(url_for("index"))
+
     if request.method == "POST":
         passenger_name = request.form.get("passenger_name", "").strip()
         passenger_phone = request.form.get("passenger_phone", "").strip()
         if not passenger_name or not passenger_phone:
             flash("请填写乘车人信息", "danger")
-            return redirect(url_for("book", schedule_id=schedule_id))
+            return render_template("booking.html", schedule=schedule)
+
+        existing = Order.query.filter_by(
+            user_id=current_user.id, schedule_id=schedule_id,
+        ).filter(Order.order_status != "cancelled").first()
+        if existing:
+            flash("您已预订过该班次，不能重复订票", "warning")
+            return redirect(url_for("schedule_detail", schedule_id=schedule_id))
 
         stmt = select(Schedule).where(
             Schedule.id == schedule_id, Schedule.status == "active"
@@ -218,14 +261,18 @@ def book(schedule_id):
         schedule.available_seats -= 1
         db.session.add(order)
         db.session.commit()
-        flash(f"订票成功！座位号: {seat_number}", "success")
-        return redirect(url_for("my_orders"))
+        return redirect(url_for("booking_success", order_id=order.id))
 
-    schedule = db.session.get(Schedule, schedule_id)
-    if not schedule or schedule.status != "active":
-        flash("该班次不可预订", "danger")
-        return redirect(url_for("index"))
     return render_template("booking.html", schedule=schedule)
+
+
+@app.route("/booking_success/<int:order_id>")
+@login_required
+def booking_success(order_id):
+    order = db.session.get(Order, order_id)
+    if not order or order.user_id != current_user.id:
+        abort(403)
+    return render_template("booking_success.html", order=order)
 
 
 @app.route("/my_orders")
@@ -287,6 +334,12 @@ def admin_schedules():
 @admin_required
 def admin_schedule_new():
     if request.method == "POST":
+        errors = _validate_schedule_form(request.form)
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return render_template("admin/schedule_form.html", schedule=None, form_data=dict(request.form))
+
         total = int(request.form.get("total_seats", 40))
         s = Schedule(
             departure=request.form["departure"],
@@ -301,7 +354,7 @@ def admin_schedule_new():
         db.session.commit()
         flash("班次已添加", "success")
         return redirect(url_for("admin_schedules"))
-    return render_template("admin/schedule_form.html", schedule=None)
+    return render_template("admin/schedule_form.html", schedule=None, form_data={})
 
 
 @app.route("/admin/schedules/<int:schedule_id>/edit", methods=["GET", "POST"])
@@ -311,16 +364,27 @@ def admin_schedule_edit(schedule_id):
     if not schedule:
         abort(404)
     if request.method == "POST":
+        errors = _validate_schedule_form(request.form)
+        if errors:
+            for e in errors:
+                flash(e, "danger")
+            return render_template("admin/schedule_form.html", schedule=schedule, form_data=dict(request.form))
+
+        new_total = int(request.form.get("total_seats", 40))
+        old_total = schedule.total_seats
+        diff = new_total - old_total
+
         schedule.departure = request.form["departure"]
         schedule.destination = request.form["destination"]
         schedule.departure_time = datetime.strptime(request.form["departure_time"], "%Y-%m-%dT%H:%M")
         schedule.arrival_time = datetime.strptime(request.form["arrival_time"], "%Y-%m-%dT%H:%M")
         schedule.price = float(request.form["price"])
-        schedule.total_seats = int(request.form.get("total_seats", 40))
+        schedule.total_seats = new_total
+        schedule.available_seats = max(0, schedule.available_seats + diff)
         db.session.commit()
         flash("班次已更新", "success")
         return redirect(url_for("admin_schedules"))
-    return render_template("admin/schedule_form.html", schedule=schedule)
+    return render_template("admin/schedule_form.html", schedule=schedule, form_data={})
 
 
 @app.route("/admin/schedules/<int:schedule_id>/cancel", methods=["POST"])
@@ -329,9 +393,19 @@ def admin_schedule_cancel(schedule_id):
     schedule = db.session.get(Schedule, schedule_id)
     if not schedule:
         abort(404)
+
+    paid_orders = Order.query.filter_by(
+        schedule_id=schedule_id, order_status="paid"
+    ).all()
+    for order in paid_orders:
+        order.order_status = "cancelled"
+
     schedule.status = "cancelled"
     db.session.commit()
-    flash("班次已取消", "success")
+    msg = "班次已取消"
+    if paid_orders:
+        msg += f"，{len(paid_orders)} 张相关订单已自动取消"
+    flash(msg, "success")
     return redirect(url_for("admin_schedules"))
 
 
