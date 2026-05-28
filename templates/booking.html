@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set fv = form_data or {} %}
 {% block title %}订票 - {{ schedule.departure }} → {{ schedule.destination }}{% endblock %}
 
 {% block content %}
@@ -7,7 +8,8 @@
     <div class="booking-schedule">
         <p><strong>{{ schedule.departure }} → {{ schedule.destination }}</strong></p>
         <p>出发: {{ schedule.departure_time.strftime('%Y-%m-%d %H:%M') }} |
-           到达: {{ schedule.arrival_time.strftime('%H:%M') }}</p>
+           到达: {{ schedule.arrival_time.strftime('%H:%M') }} |
+           行程: {{ schedule.departure_time|duration(schedule.arrival_time) }}</p>
         <p>票价: <span class="price">¥{{ schedule.price }}</span> | 余票: {{ schedule.available_seats }}</p>
     </div>
 
@@ -16,12 +18,12 @@
         <div class="form-group">
             <label>乘车人姓名</label>
             <input type="text" name="passenger_name" required placeholder="请输入真实姓名"
-                   value="{{ current_user.real_name if current_user.real_name else '' }}">
+                   value="{{ fv.get('passenger_name', current_user.real_name if current_user.real_name else '') }}">
         </div>
         <div class="form-group">
             <label>手机号码</label>
             <input type="text" name="passenger_phone" required placeholder="请输入手机号码"
-                   value="{{ current_user.phone if current_user.phone else '' }}">
+                   value="{{ fv.get('passenger_phone', current_user.phone if current_user.phone else '') }}">
         </div>
         <button type="submit" class="btn btn-primary btn-lg">确认订票</button>
         <a href="{{ url_for('schedule_detail', schedule_id=schedule.id) }}" class="btn btn-outline ml-1">返回</a>

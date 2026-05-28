@@ -26,6 +26,17 @@
     </div>
 </form>
 
+{% if departure or destination or date %}
+<div class="search-summary">
+    搜索条件：
+    {% if departure %}<strong>{{ departure }}</strong>{% endif %}
+    {% if departure and destination %} → {% endif %}
+    {% if destination %}<strong>{{ destination }}</strong>{% endif %}
+    {% if date %} | 日期: <strong>{{ date }}</strong>{% endif %}
+    | 找到 {{ schedules|length }} 条结果
+</div>
+{% endif %}
+
 {% if schedules %}
 <div class="schedule-list">
     {% for s in schedules %}
@@ -34,6 +45,7 @@
             <span class="city">{{ s.departure }}</span>
             <span class="arrow">→</span>
             <span class="city">{{ s.destination }}</span>
+            <span class="duration">{{ s.departure_time|duration(s.arrival_time) }}</span>
         </div>
         <div class="schedule-meta">
             <span>🕐 {{ s.departure_time.strftime('%Y-%m-%d %H:%M') }} - {{ s.arrival_time.strftime('%H:%M') }}</span>

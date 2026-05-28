@@ -463,3 +463,58 @@ a:hover { color: #3451d1; }
     .detail-grid { grid-template-columns: 1fr 1fr; }
     .success-actions { flex-direction: column; }
 }
+
+/* ── Nav Toggle (mobile) ───────────────────────────────────────────────────── */
+.nav-toggle {
+    display: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: .5rem;
+}
+.nav-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: #fff;
+    margin: 5px 0;
+    transition: .3s;
+}
+@media (max-width: 768px) {
+    .nav-toggle { display: block; }
+    .nav-links { display: none; flex-direction: column; width: 100%; padding-bottom: .5rem; }
+    .nav-links.nav-open { display: flex; }
+    .nav-links a, .nav-links .btn { padding: .4rem 0; text-align: left; }
+}
+
+/* ── Search Summary ─────────────────────────────────────────────────────────── */
+.search-summary {
+    background: #eef2ff;
+    padding: .6rem 1rem;
+    border-radius: 6px;
+    margin-bottom: 1rem;
+    font-size: .9rem;
+    color: #555;
+}
+
+/* ── Duration Badge ─────────────────────────────────────────────────────────── */
+.duration {
+    display: inline-block;
+    background: #eef2ff;
+    color: #4a6cf7;
+    padding: .15rem .5rem;
+    border-radius: 4px;
+    font-size: .8rem;
+    font-weight: 500;
+    margin-left: .5rem;
+}
+
+/* ── Past Orders ────────────────────────────────────────────────────────────── */
+.order-past td { opacity: .5; color: #999; }
+
+/* ── Input Disabled ─────────────────────────────────────────────────────────── */
+.input-disabled {
+    background: #f5f5f5;
+    color: #999;
+    cursor: not-allowed;
+}

@@ -10,7 +10,10 @@
     <nav class="navbar">
         <div class="nav-container">
             <a href="{{ url_for('index') }}" class="nav-brand">🚌 汽车订票平台</a>
-            <div class="nav-links">
+            <button class="nav-toggle" id="navToggle" aria-label="菜单">
+                <span></span><span></span><span></span>
+            </button>
+            <div class="nav-links" id="navLinks">
                 <a href="{{ url_for('index') }}">首页</a>
                 <a href="{{ url_for('search') }}">查询班次</a>
                 {% if current_user.is_authenticated %}
@@ -18,7 +21,7 @@
                     {% if current_user.is_admin %}
                         <a href="{{ url_for('admin_dashboard') }}">管理后台</a>
                     {% endif %}
-                    <span class="nav-user">👤 {{ current_user.username }}</span>
+                    <a href="{{ url_for('profile') }}" class="nav-user">👤 {{ current_user.username }}</a>
                     <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline">退出</a>
                 {% else %}
                     <a href="{{ url_for('login') }}" class="btn btn-sm btn-outline">登录</a>

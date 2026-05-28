@@ -13,6 +13,7 @@
             <th>订单号</th>
             <th>路线</th>
             <th>出发时间</th>
+            <th>行程</th>
             <th>乘车人</th>
             <th>手机号</th>
             <th>座位号</th>
@@ -23,10 +24,11 @@
     </thead>
     <tbody>
         {% for order in orders %}
-        <tr>
+        <tr class="{{ 'order-past' if order.schedule.departure_time <= now else '' }}">
             <td>#{{ order.id }}</td>
             <td>{{ order.schedule.departure }} → {{ order.schedule.destination }}</td>
             <td>{{ order.schedule.departure_time.strftime('%m-%d %H:%M') }}</td>
+            <td>{{ order.schedule.departure_time|duration(order.schedule.arrival_time) }}</td>
             <td>{{ order.passenger_name }}</td>
             <td>{{ order.passenger_phone }}</td>
             <td>{{ order.seat_number }}</td>
@@ -35,9 +37,12 @@
                 <span class="badge badge-{{ 'success' if order.order_status == 'paid' else ('warning' if order.order_status == 'used' else 'danger') }}">
                     {{ {'paid': '已支付', 'used': '已使用', 'cancelled': '已取消'}.get(order.order_status, order.order_status) }}
                 </span>
+                {% if order.schedule.departure_time <= now and order.order_status == 'paid' %}
+                <span class="badge badge-secondary">已过期</span>
+                {% endif %}
             </td>
             <td>
-                {% if order.order_status == 'paid' %}
+                {% if order.order_status == 'paid' and order.schedule.departure_time > now %}
                 <form method="post" action="{{ url_for('cancel_order', order_id=order.id) }}"
                       onsubmit="return confirm('确定要取消该订单吗？')">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

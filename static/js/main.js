@@ -23,4 +23,19 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         });
     });
+
+    // Mobile hamburger menu toggle
+    var toggle = document.getElementById("navToggle");
+    var links = document.getElementById("navLinks");
+    if (toggle && links) {
+        toggle.addEventListener("click", function () {
+            links.classList.toggle("nav-open");
+        });
+        // Close menu when a link is clicked
+        links.querySelectorAll("a").forEach(function (a) {
+            a.addEventListener("click", function () {
+                links.classList.remove("nav-open");
+            });
+        });
+    }
 });

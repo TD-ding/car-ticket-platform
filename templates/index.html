@@ -25,6 +25,7 @@
             <span class="city">{{ s.departure }}</span>
             <span class="arrow">→</span>
             <span class="city">{{ s.destination }}</span>
+            <span class="duration">{{ s.departure_time|duration(s.arrival_time) }}</span>
         </div>
         <div class="schedule-meta">
             <span>🕐 {{ s.departure_time.strftime('%m-%d %H:%M') }}</span>
