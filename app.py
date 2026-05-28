@@ -38,6 +38,19 @@ def admin_required(f):
     return decorated
 
 
+# ── Template Filters ──────────────────────────────────────────────────────────
+
+@app.template_filter("duration")
+def duration_filter(start, end):
+    total_minutes = int((end - start).total_seconds() // 60)
+    hours, minutes = divmod(total_minutes, 60)
+    if hours and minutes:
+        return f"{hours}小时{minutes}分钟"
+    if hours:
+        return f"{hours}小时"
+    return f"{minutes}分钟"
+
+
 # ── CSRF Protection ───────────────────────────────────────────────────────────
 
 def _generate_csrf_token():
@@ -91,14 +104,12 @@ def _validate_schedule_form(form, schedule=None):
             errors.append("票价必须大于0")
     except (ValueError, KeyError):
         errors.append("票价格式不正确")
-        price = None
     try:
         total = int(form.get("total_seats", 40))
         if total <= 0:
             errors.append("座位数必须大于0")
     except (ValueError, KeyError):
         errors.append("座位数格式不正确")
-        total = None
     return errors
 
 
@@ -158,6 +169,51 @@ def logout():
     logout_user()
     flash("已退出登录", "info")
     return redirect(url_for("index"))
+
+
+# ── Profile ───────────────────────────────────────────────────────────────────
+
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    if request.method == "POST":
+        real_name = request.form.get("real_name", "").strip()
+        phone = request.form.get("phone", "").strip()
+        email = request.form.get("email", "").strip()
+        current_user.real_name = real_name
+        current_user.phone = phone
+        current_user.email = email
+        db.session.commit()
+        flash("个人资料已更新", "success")
+        return redirect(url_for("profile"))
+    return render_template("profile.html")
+
+
+@app.route("/change_password", methods=["GET", "POST"])
+@login_required
+def change_password():
+    if request.method == "POST":
+        old_pwd = request.form.get("old_password", "")
+        new_pwd = request.form.get("new_password", "")
+        confirm_pwd = request.form.get("confirm_password", "")
+
+        if not check_password_hash(current_user.password_hash, old_pwd):
+            flash("当前密码不正确", "danger")
+            return redirect(url_for("change_password"))
+        if len(new_pwd) < 6:
+            flash("新密码至少6位", "danger")
+            return redirect(url_for("change_password"))
+        if new_pwd != confirm_pwd:
+            flash("两次新密码不一致", "danger")
+            return redirect(url_for("change_password"))
+
+        current_user.password_hash = generate_password_hash(new_pwd)
+        db.session.commit()
+        flash("密码已修改，请重新登录", "success")
+        logout_user()
+        return redirect(url_for("login"))
+
+    return render_template("change_password.html")
 
 
 # ── Public Pages ──────────────────────────────────────────────────────────────
@@ -224,11 +280,12 @@ def book(schedule_id):
         return redirect(url_for("index"))
 
     if request.method == "POST":
+        form_data = dict(request.form)
         passenger_name = request.form.get("passenger_name", "").strip()
         passenger_phone = request.form.get("passenger_phone", "").strip()
         if not passenger_name or not passenger_phone:
             flash("请填写乘车人信息", "danger")
-            return render_template("booking.html", schedule=schedule)
+            return render_template("booking.html", schedule=schedule, form_data=form_data)
 
         existing = Order.query.filter_by(
             user_id=current_user.id, schedule_id=schedule_id,
@@ -263,7 +320,7 @@ def book(schedule_id):
         db.session.commit()
         return redirect(url_for("booking_success", order_id=order.id))
 
-    return render_template("booking.html", schedule=schedule)
+    return render_template("booking.html", schedule=schedule, form_data={})
 
 
 @app.route("/booking_success/<int:order_id>")
@@ -284,7 +341,7 @@ def my_orders():
         .order_by(Order.created_at.desc())
         .paginate(page=page, per_page=15, error_out=False)
     )
-    return render_template("my_orders.html", orders=pagination.items, pagination=pagination)
+    return render_template("my_orders.html", orders=pagination.items, pagination=pagination, now=datetime.now())
 
 
 @app.route("/order/<int:order_id>/cancel", methods=["POST"])
