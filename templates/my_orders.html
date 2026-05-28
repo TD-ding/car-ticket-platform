@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}我的订单 - 汽车订票平台{% endblock %}
+
+{% block content %}
+<h2>我的订单</h2>
+
+{% if orders %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>订单号</th>
+            <th>路线</th>
+            <th>出发时间</th>
+            <th>乘车人</th>
+            <th>手机号</th>
+            <th>座位号</th>
+            <th>票价</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for order in orders %}
+        <tr>
+            <td>#{{ order.id }}</td>
+            <td>{{ order.schedule.departure }} → {{ order.schedule.destination }}</td>
+            <td>{{ order.schedule.departure_time.strftime('%m-%d %H:%M') }}</td>
+            <td>{{ order.passenger_name }}</td>
+            <td>{{ order.passenger_phone }}</td>
+            <td>{{ order.seat_number }}</td>
+            <td>¥{{ order.schedule.price }}</td>
+            <td>
+                <span class="badge badge-{{ 'success' if order.order_status == 'paid' else ('warning' if order.order_status == 'used' else 'danger') }}">
+                    {{ {'paid': '已支付', 'used': '已使用', 'cancelled': '已取消'}.get(order.order_status, order.order_status) }}
+                </span>
+            </td>
+            <td>
+                {% if order.order_status == 'paid' %}
+                <form method="post" action="{{ url_for('cancel_order', order_id=order.id) }}"
+                      onsubmit="return confirm('确定要取消该订单吗？')">
+                    <button type="submit" class="btn btn-sm btn-danger">取消</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-center">暂无订单，去<a href="{{ url_for('index') }}">首页</a>看看吧</p>
+{% endif %}
+{% endblock %}

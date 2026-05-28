@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}汽车订票平台 - 首页{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>欢迎使用汽车订票平台</h1>
+    <p>快捷、方便、安全的在线汽车票预订服务</p>
+    <form action="{{ url_for('search') }}" method="get" class="search-form-inline">
+        <input type="text" name="departure" placeholder="出发地">
+        <span class="arrow">→</span>
+        <input type="text" name="destination" placeholder="目的地">
+        <input type="date" name="date">
+        <button type="submit" class="btn btn-primary">搜索班次</button>
+    </form>
+</div>
+
+<h2 class="section-title">近期班次</h2>
+{% if schedules %}
+<div class="schedule-list">
+    {% for s in schedules %}
+    <div class="schedule-card" onclick="location.href='{{ url_for('schedule_detail', schedule_id=s.id) }}'">
+        <div class="schedule-route">
+            <span class="city">{{ s.departure }}</span>
+            <span class="arrow">→</span>
+            <span class="city">{{ s.destination }}</span>
+        </div>
+        <div class="schedule-meta">
+            <span>🕐 {{ s.departure_time.strftime('%m-%d %H:%M') }}</span>
+            <span>💰 ¥{{ s.price }}</span>
+            <span class="{{ 'text-danger' if s.available_seats < 10 else 'text-success' }}">
+                余票: {{ s.available_seats }}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<p class="text-center">暂无可预订班次</p>
+{% endif %}
+{% endblock %}

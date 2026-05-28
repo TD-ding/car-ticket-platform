@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ schedule.departure }} → {{ schedule.destination }} - 汽车订票平台{% endblock %}
+
+{% block content %}
+<div class="detail-card">
+    <h2>{{ schedule.departure }} → {{ schedule.destination }}</h2>
+    <div class="detail-grid">
+        <div class="detail-item">
+            <label>出发时间</label>
+            <span>{{ schedule.departure_time.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+        <div class="detail-item">
+            <label>到达时间</label>
+            <span>{{ schedule.arrival_time.strftime('%Y-%m-%d %H:%M') }}</span>
+        </div>
+        <div class="detail-item">
+            <label>票价</label>
+            <span class="price">¥{{ schedule.price }}</span>
+        </div>
+        <div class="detail-item">
+            <label>剩余座位</label>
+            <span class="{{ 'text-danger' if schedule.available_seats < 10 else 'text-success' }}">
+                {{ schedule.available_seats }} / {{ schedule.total_seats }}
+            </span>
+        </div>
+        <div class="detail-item">
+            <label>状态</label>
+            <span class="badge badge-{{ 'success' if schedule.status == 'active' else 'danger' }}">
+                {{ '正常运行' if schedule.status == 'active' else '已取消' }}
+            </span>
+        </div>
+    </div>
+
+    {% if schedule.available_seats > 0 and schedule.status == 'active' %}
+        <a href="{{ url_for('book', schedule_id=schedule.id) }}" class="btn btn-primary btn-lg mt-2">
+            立即订票
+        </a>
+    {% elif schedule.available_seats <= 0 %}
+        <button class="btn btn-disabled" disabled>已售罄</button>
+    {% endif %}
+</div>
+{% endblock %}

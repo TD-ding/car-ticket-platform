@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}搜索班次 - 汽车订票平台{% endblock %}
+
+{% block content %}
+<h2>搜索班次</h2>
+<form action="{{ url_for('search') }}" method="get" class="search-form-card">
+    <div class="form-row">
+        <div class="form-group">
+            <label>出发地</label>
+            <input type="text" name="departure" value="{{ departure }}" placeholder="出发城市">
+        </div>
+        <div class="form-group">
+            <label>目的地</label>
+            <input type="text" name="destination" value="{{ destination }}" placeholder="目的城市">
+        </div>
+        <div class="form-group">
+            <label>出发日期</label>
+            <input type="date" name="date" value="{{ date }}">
+        </div>
+        <div class="form-group">
+            <label>&nbsp;</label>
+            <button type="submit" class="btn btn-primary">搜索</button>
+        </div>
+    </div>
+</form>
+
+{% if schedules %}
+<div class="schedule-list">
+    {% for s in schedules %}
+    <div class="schedule-card" onclick="location.href='{{ url_for('schedule_detail', schedule_id=s.id) }}'">
+        <div class="schedule-route">
+            <span class="city">{{ s.departure }}</span>
+            <span class="arrow">→</span>
+            <span class="city">{{ s.destination }}</span>
+        </div>
+        <div class="schedule-meta">
+            <span>🕐 {{ s.departure_time.strftime('%Y-%m-%d %H:%M') }} - {{ s.arrival_time.strftime('%H:%M') }}</span>
+            <span>💰 ¥{{ s.price }}</span>
+            <span class="{{ 'text-danger' if s.available_seats < 10 else 'text-success' }}">
+                余票: {{ s.available_seats }}
+            </span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% elif departure or destination %}
+<p class="text-center">未找到符合条件的班次</p>
+{% endif %}
+{% endblock %}

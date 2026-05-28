@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}管理后台 - 汽车订票平台{% endblock %}
+
+{% block content %}
+<h2>管理后台</h2>
+<div class="admin-nav">
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline active">仪表盘</a>
+    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline">班次管理</a>
+    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline">订单管理</a>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline">用户管理</a>
+</div>
+
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.users }}</div>
+        <div class="stat-label">注册用户</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.schedules }}</div>
+        <div class="stat-label">活跃班次</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.orders }}</div>
+        <div class="stat-label">有效订单</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">¥{{ "%.2f"|format(stats.revenue) }}</div>
+        <div class="stat-label">累计营收</div>
+    </div>
+</div>
+{% endblock %}

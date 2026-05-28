@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}订单管理 - 管理后台{% endblock %}
+
+{% block content %}
+<h2>订单管理</h2>
+<div class="admin-nav">
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline">仪表盘</a>
+    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline">班次管理</a>
+    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline active">订单管理</a>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline">用户管理</a>
+</div>
+
+{% if orders %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>订单号</th>
+            <th>用户</th>
+            <th>路线</th>
+            <th>出发时间</th>
+            <th>乘车人</th>
+            <th>手机号</th>
+            <th>座位号</th>
+            <th>票价</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for order in orders %}
+        <tr>
+            <td>#{{ order.id }}</td>
+            <td>{{ order.user.username }}</td>
+            <td>{{ order.schedule.departure }} → {{ order.schedule.destination }}</td>
+            <td>{{ order.schedule.departure_time.strftime('%m-%d %H:%M') }}</td>
+            <td>{{ order.passenger_name }}</td>
+            <td>{{ order.passenger_phone }}</td>
+            <td>{{ order.seat_number }}</td>
+            <td>¥{{ order.schedule.price }}</td>
+            <td>
+                <span class="badge badge-{{ 'success' if order.order_status == 'paid' else ('warning' if order.order_status == 'used' else 'danger') }}">
+                    {{ {'paid': '已支付', 'used': '已使用', 'cancelled': '已取消'}.get(order.order_status) }}
+                </span>
+            </td>
+            <td>
+                <form method="post" action="{{ url_for('admin_order_status', order_id=order.id) }}" class="inline-form">
+                    <select name="status" onchange="this.form.submit()">
+                        <option value="paid" {{ 'selected' if order.order_status == 'paid' }}>已支付</option>
+                        <option value="used" {{ 'selected' if order.order_status == 'used' }}>已使用</option>
+                        <option value="cancelled" {{ 'selected' if order.order_status == 'cancelled' }}>已取消</option>
+                    </select>
+                </form>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-center">暂无订单</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}班次管理 - 管理后台{% endblock %}
+
+{% block content %}
+<h2>班次管理</h2>
+<div class="admin-nav">
+    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline">仪表盘</a>
+    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline active">班次管理</a>
+    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline">订单管理</a>
+    <a href="{{ url_for('admin_users') }}" class="btn btn-outline">用户管理</a>
+</div>
+
+<div class="toolbar">
+    <a href="{{ url_for('admin_schedule_new') }}" class="btn btn-primary">+ 添加班次</a>
+</div>
+
+{% if schedules %}
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>出发地</th>
+            <th>目的地</th>
+            <th>出发时间</th>
+            <th>到达时间</th>
+            <th>票价</th>
+            <th>余票</th>
+            <th>状态</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for s in schedules %}
+        <tr>
+            <td>{{ s.id }}</td>
+            <td>{{ s.departure }}</td>
+            <td>{{ s.destination }}</td>
+            <td>{{ s.departure_time.strftime('%m-%d %H:%M') }}</td>
+            <td>{{ s.arrival_time.strftime('%m-%d %H:%M') }}</td>
+            <td>¥{{ s.price }}</td>
+            <td>{{ s.available_seats }}/{{ s.total_seats }}</td>
+            <td>
+                <span class="badge badge-{{ 'success' if s.status == 'active' else 'danger' }}">
+                    {{ '正常' if s.status == 'active' else '已取消' }}
+                </span>
+            </td>
+            <td class="actions">
+                <a href="{{ url_for('admin_schedule_edit', schedule_id=s.id) }}" class="btn btn-sm btn-outline">编辑</a>
+                {% if s.status == 'active' %}
+                <form method="post" action="{{ url_for('admin_schedule_cancel', schedule_id=s.id) }}"
+                      onsubmit="return confirm('确定要取消该班次吗？')">
+                    <button type="submit" class="btn btn-sm btn-danger">取消</button>
+                </form>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="text-center">暂无班次</p>
+{% endif %}
+{% endblock %}

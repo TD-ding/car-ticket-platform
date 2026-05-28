@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑班次' if schedule else '添加班次' }} - 管理后台{% endblock %}
+
+{% block content %}
+<h2>{{ '编辑班次' if schedule else '添加班次' }}</h2>
+<a href="{{ url_for('admin_schedules') }}" class="btn btn-outline mb-2">&larr; 返回列表</a>
+
+<form method="post" class="form-card">
+    <div class="form-group">
+        <label>出发地</label>
+        <input type="text" name="departure" required
+               value="{{ schedule.departure if schedule else '' }}" placeholder="例: 北京">
+    </div>
+    <div class="form-group">
+        <label>目的地</label>
+        <input type="text" name="destination" required
+               value="{{ schedule.destination if schedule else '' }}" placeholder="例: 上海">
+    </div>
+    <div class="form-group">
+        <label>出发时间</label>
+        <input type="datetime-local" name="departure_time" required
+               value="{{ schedule.departure_time.strftime('%Y-%m-%dT%H:%M') if schedule else '' }}">
+    </div>
+    <div class="form-group">
+        <label>到达时间</label>
+        <input type="datetime-local" name="arrival_time" required
+               value="{{ schedule.arrival_time.strftime('%Y-%m-%dT%H:%M') if schedule else '' }}">
+    </div>
+    <div class="form-group">
+        <label>票价（元）</label>
+        <input type="number" name="price" step="0.1" min="0" required
+               value="{{ schedule.price if schedule else '' }}">
+    </div>
+    <div class="form-group">
+        <label>总座位数</label>
+        <input type="number" name="total_seats" min="1" required
+               value="{{ schedule.total_seats if schedule else 40 }}">
+    </div>
+    <button type="submit" class="btn btn-primary">{{ '保存修改' if schedule else '添加班次' }}</button>
+    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline">取消</a>
+</form>
+{% endblock %}
