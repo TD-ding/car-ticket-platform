@@ -541,7 +541,7 @@ def toggle_favorite(schedule_id):
         db.session.add(Favorite(user_id=current_user.id, schedule_id=schedule_id))
         flash("已收藏", "success")
     db.session.commit()
-    return redirect(url_for("schedule_detail", schedule_id=schedule_id))
+    return redirect(request.referrer or url_for("schedule_detail", schedule_id=schedule_id))
 
 
 # ── Admin: Schedules ─────────────────────────────────────────────────────────
@@ -780,9 +780,21 @@ def admin_order_status(order_id):
 @admin_required
 def admin_orders_export():
     query = Order.query
+    keyword = request.args.get("keyword", "").strip()
     order_status = request.args.get("status", "").strip()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
+    if keyword:
+        kw = f"%{_escape_like(keyword)}%"
+        query = query.join(Schedule).join(User).filter(
+            db.or_(
+                User.username.ilike(kw, escape="\\"),
+                Order.passenger_name.ilike(kw, escape="\\"),
+                Order.passenger_phone.ilike(kw, escape="\\"),
+                Schedule.departure.ilike(kw, escape="\\"),
+                Schedule.destination.ilike(kw, escape="\\"),
+            )
+        )
     if order_status:
         query = query.filter(Order.order_status == order_status)
     if date_from:
@@ -835,10 +847,32 @@ def admin_orders_export():
 @admin_required
 def admin_users():
     page = request.args.get("page", 1, type=int)
-    pagination = User.query.order_by(User.created_at.desc()).paginate(
+    q_search = request.args.get("q", "").strip()
+    q_role = request.args.get("role", "").strip()
+
+    query = User.query
+    if q_search:
+        pattern = f"%{_escape_like(q_search)}%"
+        query = query.filter(
+            db.or_(
+                User.username.ilike(pattern, escape="\\"),
+                User.real_name.ilike(pattern, escape="\\"),
+                User.phone.ilike(pattern, escape="\\"),
+                User.email.ilike(pattern, escape="\\"),
+            )
+        )
+    if q_role == "admin":
+        query = query.filter_by(is_admin=True)
+    elif q_role == "user":
+        query = query.filter_by(is_admin=False)
+
+    pagination = query.order_by(User.created_at.desc()).paginate(
         page=page, per_page=20, error_out=False
     )
-    return render_template("admin/users.html", users=pagination.items, pagination=pagination)
+    return render_template(
+        "admin/users.html", users=pagination.items, pagination=pagination,
+        q_search=q_search, q_role=q_role,
+    )
 
 
 @app.route("/admin/users/<int:user_id>/toggle_admin", methods=["POST"])
