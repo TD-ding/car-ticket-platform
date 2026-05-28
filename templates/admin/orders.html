@@ -1,14 +1,12 @@
 {% extends "base.html" %}
+{% from "admin/_nav.html" import admin_nav %}
+{% from "_pagination.html" import render_pagination %}
+
 {% block title %}订单管理 - 管理后台{% endblock %}
 
 {% block content %}
 <h2>订单管理</h2>
-<div class="admin-nav">
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline">仪表盘</a>
-    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline">班次管理</a>
-    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline active">订单管理</a>
-    <a href="{{ url_for('admin_users') }}" class="btn btn-outline">用户管理</a>
-</div>
+{{ admin_nav(active='orders') }}
 
 {% if orders %}
 <table class="table">
@@ -36,7 +34,7 @@
             <td>{{ order.passenger_name }}</td>
             <td>{{ order.passenger_phone }}</td>
             <td>{{ order.seat_number }}</td>
-            <td>¥{{ order.schedule.price }}</td>
+            <td>¥{{ order.price }}</td>
             <td>
                 <span class="badge badge-{{ 'success' if order.order_status == 'paid' else ('warning' if order.order_status == 'used' else 'danger') }}">
                     {{ {'paid': '已支付', 'used': '已使用', 'cancelled': '已取消'}.get(order.order_status) }}
@@ -44,6 +42,7 @@
             </td>
             <td>
                 <form method="post" action="{{ url_for('admin_order_status', order_id=order.id) }}" class="inline-form">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <select name="status" onchange="this.form.submit()">
                         <option value="paid" {{ 'selected' if order.order_status == 'paid' }}>已支付</option>
                         <option value="used" {{ 'selected' if order.order_status == 'used' }}>已使用</option>
@@ -55,6 +54,7 @@
         {% endfor %}
     </tbody>
 </table>
+{{ render_pagination(pagination) }}
 {% else %}
 <p class="text-center">暂无订单</p>
 {% endif %}

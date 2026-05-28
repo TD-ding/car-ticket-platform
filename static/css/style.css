@@ -353,6 +353,20 @@ a:hover { color: #3451d1; }
     justify-content: flex-end;
 }
 
+/* ── Pagination ─────────────────────────────────────────────────────────────── */
+.pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+    margin-top: 1.5rem;
+    padding: 1rem 0;
+}
+.page-info {
+    color: #666;
+    font-size: .9rem;
+}
+
 /* ── Error Pages ────────────────────────────────────────────────────────────── */
 .error-page {
     text-align: center;

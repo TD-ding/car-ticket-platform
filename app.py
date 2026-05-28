@@ -1,13 +1,18 @@
+import secrets
+from functools import wraps
+from datetime import datetime, timedelta
+from urllib.parse import urlparse, urljoin
+
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, jsonify, abort,
+    flash, jsonify, abort, session,
 )
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from sqlalchemy import select
+
 from config import Config
 from models import db, User, Schedule, Order
-from functools import wraps
-from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -31,6 +36,39 @@ def admin_required(f):
             abort(403)
         return f(*args, **kwargs)
     return decorated
+
+
+# ── CSRF Protection ───────────────────────────────────────────────────────────
+
+def _generate_csrf_token():
+    if "csrf_token" not in session:
+        session["csrf_token"] = secrets.token_hex(32)
+    return session["csrf_token"]
+
+
+@app.context_processor
+def inject_csrf():
+    return {"csrf_token": _generate_csrf_token()}
+
+
+@app.before_request
+def csrf_check():
+    if request.method == "POST":
+        token = session.get("csrf_token")
+        if not token or token != request.form.get("csrf_token"):
+            abort(403)
+
+
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def _is_safe_url(target):
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ("http", "https") and test_url.netloc == ref_url.netloc
+
+
+def _escape_like(s):
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -74,8 +112,10 @@ def login():
         if user and check_password_hash(user.password_hash, password):
             login_user(user)
             next_page = request.args.get("next")
+            if not next_page or not _is_safe_url(next_page):
+                next_page = url_for("admin_dashboard") if user.is_admin else url_for("index")
             flash("登录成功", "success")
-            return redirect(next_page or (url_for("admin_dashboard") if user.is_admin else url_for("index")))
+            return redirect(next_page)
         flash("用户名或密码错误", "danger")
 
     return render_template("login.html")
@@ -93,12 +133,14 @@ def logout():
 
 @app.route("/")
 def index():
-    schedules = Schedule.query.filter(
+    page = request.args.get("page", 1, type=int)
+    query = Schedule.query.filter(
         Schedule.status == "active",
         Schedule.available_seats > 0,
         Schedule.departure_time > datetime.now(),
-    ).order_by(Schedule.departure_time).limit(20).all()
-    return render_template("index.html", schedules=schedules)
+    ).order_by(Schedule.departure_time)
+    pagination = query.paginate(page=page, per_page=20, error_out=False)
+    return render_template("index.html", schedules=pagination.items, pagination=pagination)
 
 
 @app.route("/search")
@@ -112,9 +154,9 @@ def search():
         Schedule.departure_time > datetime.now(),
     )
     if departure:
-        query = query.filter(Schedule.departure.ilike(f"%{departure}%"))
+        query = query.filter(Schedule.departure.ilike(f"%{_escape_like(departure)}%", escape="\\"))
     if destination:
-        query = query.filter(Schedule.destination.ilike(f"%{destination}%"))
+        query = query.filter(Schedule.destination.ilike(f"%{_escape_like(destination)}%", escape="\\"))
     if date:
         try:
             d = datetime.strptime(date, "%Y-%m-%d")
@@ -126,8 +168,9 @@ def search():
         except ValueError:
             pass
 
-    schedules = query.order_by(Schedule.departure_time).all()
-    return render_template("search.html", schedules=schedules,
+    page = request.args.get("page", 1, type=int)
+    pagination = query.order_by(Schedule.departure_time).paginate(page=page, per_page=20, error_out=False)
+    return render_template("search.html", schedules=pagination.items, pagination=pagination,
                            departure=departure, destination=destination, date=date)
 
 
@@ -144,21 +187,24 @@ def schedule_detail(schedule_id):
 @app.route("/book/<int:schedule_id>", methods=["GET", "POST"])
 @login_required
 def book(schedule_id):
-    schedule = db.session.get(Schedule, schedule_id)
-    if not schedule or schedule.status != "active":
-        flash("该班次不可预订", "danger")
-        return redirect(url_for("index"))
-
     if request.method == "POST":
-        if schedule.available_seats <= 0:
-            flash("该班次已满", "danger")
-            return redirect(url_for("schedule_detail", schedule_id=schedule_id))
-
         passenger_name = request.form.get("passenger_name", "").strip()
         passenger_phone = request.form.get("passenger_phone", "").strip()
         if not passenger_name or not passenger_phone:
             flash("请填写乘车人信息", "danger")
             return redirect(url_for("book", schedule_id=schedule_id))
+
+        stmt = select(Schedule).where(
+            Schedule.id == schedule_id, Schedule.status == "active"
+        ).with_for_update()
+        schedule = db.session.execute(stmt).scalar_one_or_none()
+
+        if not schedule:
+            flash("该班次不可预订", "danger")
+            return redirect(url_for("index"))
+        if schedule.available_seats <= 0:
+            flash("该班次已满", "danger")
+            return redirect(url_for("schedule_detail", schedule_id=schedule_id))
 
         seat_number = schedule.total_seats - schedule.available_seats + 1
         order = Order(
@@ -167,6 +213,7 @@ def book(schedule_id):
             passenger_name=passenger_name,
             passenger_phone=passenger_phone,
             seat_number=seat_number,
+            price=schedule.price,
         )
         schedule.available_seats -= 1
         db.session.add(order)
@@ -174,18 +221,23 @@ def book(schedule_id):
         flash(f"订票成功！座位号: {seat_number}", "success")
         return redirect(url_for("my_orders"))
 
+    schedule = db.session.get(Schedule, schedule_id)
+    if not schedule or schedule.status != "active":
+        flash("该班次不可预订", "danger")
+        return redirect(url_for("index"))
     return render_template("booking.html", schedule=schedule)
 
 
 @app.route("/my_orders")
 @login_required
 def my_orders():
-    orders = (
+    page = request.args.get("page", 1, type=int)
+    pagination = (
         Order.query.filter_by(user_id=current_user.id)
         .order_by(Order.created_at.desc())
-        .all()
+        .paginate(page=page, per_page=15, error_out=False)
     )
-    return render_template("my_orders.html", orders=orders)
+    return render_template("my_orders.html", orders=pagination.items, pagination=pagination)
 
 
 @app.route("/order/<int:order_id>/cancel", methods=["POST"])
@@ -215,8 +267,8 @@ def admin_dashboard():
         "schedules": Schedule.query.filter_by(status="active").count(),
         "orders": Order.query.filter_by(order_status="paid").count(),
         "revenue": db.session.query(
-            db.func.sum(Schedule.price)
-        ).join(Order).filter(Order.order_status == "paid").scalar() or 0,
+            db.func.sum(Order.price)
+        ).filter(Order.order_status == "paid").scalar() or 0,
     }
     return render_template("admin/dashboard.html", stats=stats)
 
@@ -224,22 +276,26 @@ def admin_dashboard():
 @app.route("/admin/schedules")
 @admin_required
 def admin_schedules():
-    schedules = Schedule.query.order_by(Schedule.departure_time.desc()).all()
-    return render_template("admin/schedules.html", schedules=schedules)
+    page = request.args.get("page", 1, type=int)
+    pagination = Schedule.query.order_by(Schedule.departure_time.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
+    return render_template("admin/schedules.html", schedules=pagination.items, pagination=pagination)
 
 
 @app.route("/admin/schedules/new", methods=["GET", "POST"])
 @admin_required
 def admin_schedule_new():
     if request.method == "POST":
+        total = int(request.form.get("total_seats", 40))
         s = Schedule(
             departure=request.form["departure"],
             destination=request.form["destination"],
             departure_time=datetime.strptime(request.form["departure_time"], "%Y-%m-%dT%H:%M"),
             arrival_time=datetime.strptime(request.form["arrival_time"], "%Y-%m-%dT%H:%M"),
             price=float(request.form["price"]),
-            total_seats=int(request.form.get("total_seats", 40)),
-            available_seats=int(request.form.get("total_seats", 40)),
+            total_seats=total,
+            available_seats=total,
         )
         db.session.add(s)
         db.session.commit()
@@ -284,8 +340,11 @@ def admin_schedule_cancel(schedule_id):
 @app.route("/admin/orders")
 @admin_required
 def admin_orders():
-    orders = Order.query.order_by(Order.created_at.desc()).all()
-    return render_template("admin/orders.html", orders=orders)
+    page = request.args.get("page", 1, type=int)
+    pagination = Order.query.order_by(Order.created_at.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
+    return render_template("admin/orders.html", orders=pagination.items, pagination=pagination)
 
 
 @app.route("/admin/orders/<int:order_id>/status", methods=["POST"])
@@ -312,8 +371,11 @@ def admin_order_status(order_id):
 @app.route("/admin/users")
 @admin_required
 def admin_users():
-    users = User.query.order_by(User.created_at.desc()).all()
-    return render_template("admin/users.html", users=users)
+    page = request.args.get("page", 1, type=int)
+    pagination = User.query.order_by(User.created_at.desc()).paginate(
+        page=page, per_page=20, error_out=False
+    )
+    return render_template("admin/users.html", users=pagination.items, pagination=pagination)
 
 
 @app.route("/admin/users/<int:user_id>/toggle_admin", methods=["POST"])
@@ -364,9 +426,24 @@ def not_found(e):
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
-if __name__ == "__main__":
+def _migrate_db():
     with app.app_context():
         db.create_all()
+        insp = db.inspect(db.engine)
+        cols = [c["name"] for c in insp.get_columns("orders")]
+        if "price" not in cols:
+            db.session.execute(db.text(
+                "ALTER TABLE orders ADD COLUMN price FLOAT NOT NULL DEFAULT 0"
+            ))
+            db.session.execute(db.text(
+                "UPDATE orders SET price = (SELECT s.price FROM schedules s WHERE s.id = orders.schedule_id)"
+            ))
+            db.session.commit()
+
+
+if __name__ == "__main__":
+    _migrate_db()
+    with app.app_context():
         if not User.query.filter_by(username="admin").first():
             admin = User(
                 username="admin",

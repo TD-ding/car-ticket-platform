@@ -45,5 +45,6 @@ class Order(db.Model):
     passenger_name = db.Column(db.String(80), nullable=False)
     passenger_phone = db.Column(db.String(20), nullable=False)
     seat_number = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Float, nullable=False, default=0)
     order_status = db.Column(db.String(20), default="paid")  # paid / cancelled / used
     created_at = db.Column(db.DateTime, default=datetime.utcnow)

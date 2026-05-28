@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+
 {% block title %}{{ '编辑班次' if schedule else '添加班次' }} - 管理后台{% endblock %}
 
 {% block content %}
@@ -6,6 +7,7 @@
 <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline mb-2">&larr; 返回列表</a>
 
 <form method="post" class="form-card">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
     <div class="form-group">
         <label>出发地</label>
         <input type="text" name="departure" required

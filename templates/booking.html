@@ -12,6 +12,7 @@
     </div>
 
     <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
         <div class="form-group">
             <label>乘车人姓名</label>
             <input type="text" name="passenger_name" required placeholder="请输入真实姓名"

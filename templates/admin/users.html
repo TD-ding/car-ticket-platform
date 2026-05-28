@@ -1,14 +1,12 @@
 {% extends "base.html" %}
+{% from "admin/_nav.html" import admin_nav %}
+{% from "_pagination.html" import render_pagination %}
+
 {% block title %}用户管理 - 管理后台{% endblock %}
 
 {% block content %}
 <h2>用户管理</h2>
-<div class="admin-nav">
-    <a href="{{ url_for('admin_dashboard') }}" class="btn btn-outline">仪表盘</a>
-    <a href="{{ url_for('admin_schedules') }}" class="btn btn-outline">班次管理</a>
-    <a href="{{ url_for('admin_orders') }}" class="btn btn-outline">订单管理</a>
-    <a href="{{ url_for('admin_users') }}" class="btn btn-outline active">用户管理</a>
-</div>
+{{ admin_nav(active='users') }}
 
 {% if users %}
 <table class="table">
@@ -42,6 +40,7 @@
                 {% if u.id != current_user.id %}
                 <form method="post" action="{{ url_for('admin_toggle_admin', user_id=u.id) }}"
                       onsubmit="return confirm('确定要{{ '取消' if u.is_admin else '设为' }}管理员？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                     <button type="submit" class="btn btn-sm btn-{{ 'warning' if u.is_admin else 'primary' }}">
                         {{ '取消管理员' if u.is_admin else '设为管理员' }}
                     </button>
@@ -52,6 +51,7 @@
         {% endfor %}
     </tbody>
 </table>
+{{ render_pagination(pagination) }}
 {% else %}
 <p class="text-center">暂无用户</p>
 {% endif %}

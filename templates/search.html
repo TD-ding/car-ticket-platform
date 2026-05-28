@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "_pagination.html" import render_pagination %}
+
 {% block title %}搜索班次 - 汽车订票平台{% endblock %}
 
 {% block content %}
@@ -43,6 +45,7 @@
     </div>
     {% endfor %}
 </div>
+{{ render_pagination(pagination) }}
 {% elif departure or destination %}
 <p class="text-center">未找到符合条件的班次</p>
 {% endif %}
