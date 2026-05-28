@@ -162,6 +162,9 @@ def register():
         if not username or not password:
             flash("用户名和密码不能为空", "danger")
             return redirect(url_for("register"))
+        if len(password) < 6:
+            flash("密码至少6位", "danger")
+            return redirect(url_for("register"))
         if password != confirm:
             flash("两次密码不一致", "danger")
             return redirect(url_for("register"))
@@ -447,6 +450,10 @@ def join_waitlist(schedule_id):
         flash("该班次不可候补", "danger")
         return redirect(url_for("index"))
 
+    if schedule.available_seats > 0:
+        flash("该班次仍有余票，请直接订票", "info")
+        return redirect(url_for("book", schedule_id=schedule_id))
+
     existing = Waitlist.query.filter_by(
         user_id=current_user.id, schedule_id=schedule_id, status="waiting"
     ).first()
@@ -541,7 +548,7 @@ def toggle_favorite(schedule_id):
         db.session.add(Favorite(user_id=current_user.id, schedule_id=schedule_id))
         flash("已收藏", "success")
     db.session.commit()
-    return redirect(url_for("schedule_detail", schedule_id=schedule_id))
+    return redirect(request.referrer or url_for("schedule_detail", schedule_id=schedule_id))
 
 
 # ── Admin: Schedules ─────────────────────────────────────────────────────────
@@ -641,8 +648,12 @@ def admin_schedule_edit(schedule_id):
             return render_template("admin/schedule_form.html", schedule=schedule, form_data=dict(request.form))
 
         new_total = int(request.form.get("total_seats", 40))
-        old_total = schedule.total_seats
-        diff = new_total - old_total
+        sold = schedule.sold_seats
+        if new_total < sold:
+            flash(f"总座位数不能少于已售出数量（已售 {sold} 张）", "danger")
+            return render_template("admin/schedule_form.html", schedule=schedule, form_data=dict(request.form))
+
+        diff = new_total - schedule.total_seats
 
         schedule.departure = request.form["departure"]
         schedule.destination = request.form["destination"]
@@ -650,7 +661,7 @@ def admin_schedule_edit(schedule_id):
         schedule.arrival_time = datetime.strptime(request.form["arrival_time"], "%Y-%m-%dT%H:%M")
         schedule.price = float(request.form["price"])
         schedule.total_seats = new_total
-        schedule.available_seats = max(0, schedule.available_seats + diff)
+        schedule.available_seats = schedule.available_seats + diff
         db.session.commit()
         flash("班次已更新", "success")
         return redirect(url_for("admin_schedules"))
@@ -765,12 +776,23 @@ def admin_order_status(order_id):
     new_status = request.form.get("status")
     if new_status in ("paid", "used", "cancelled"):
         old_status = order.order_status
-        order.order_status = new_status
-        if new_status == "cancelled" and old_status != "cancelled":
+        if old_status == new_status:
+            return redirect(url_for("admin_orders"))
+
+        if old_status != "cancelled" and new_status == "cancelled":
             order.schedule.available_seats += 1
+            order.order_status = "cancelled"
             _process_waitlist(order.schedule)
-        elif new_status == "paid" and old_status == "cancelled":
+        elif old_status == "cancelled" and new_status in ("paid", "used"):
+            if order.schedule.available_seats <= 0:
+                flash("该班次已满，无法恢复订单", "danger")
+                return redirect(url_for("admin_orders"))
             order.schedule.available_seats -= 1
+            order.order_status = new_status
+        else:
+            # paid <-> used, no seat change needed
+            order.order_status = new_status
+
         db.session.commit()
         flash("订单状态已更新", "success")
     return redirect(url_for("admin_orders"))
@@ -780,9 +802,21 @@ def admin_order_status(order_id):
 @admin_required
 def admin_orders_export():
     query = Order.query
+    keyword = request.args.get("keyword", "").strip()
     order_status = request.args.get("status", "").strip()
     date_from = request.args.get("date_from", "").strip()
     date_to = request.args.get("date_to", "").strip()
+    if keyword:
+        kw = f"%{_escape_like(keyword)}%"
+        query = query.join(Schedule).join(User).filter(
+            db.or_(
+                User.username.ilike(kw, escape="\\"),
+                Order.passenger_name.ilike(kw, escape="\\"),
+                Order.passenger_phone.ilike(kw, escape="\\"),
+                Schedule.departure.ilike(kw, escape="\\"),
+                Schedule.destination.ilike(kw, escape="\\"),
+            )
+        )
     if order_status:
         query = query.filter(Order.order_status == order_status)
     if date_from:
@@ -801,6 +835,7 @@ def admin_orders_export():
     orders = query.order_by(Order.created_at.desc()).all()
 
     output = io.StringIO()
+    output.write("﻿")
     writer = csv.writer(output)
     writer.writerow(["订单号", "用户", "乘车人", "手机号", "出发地", "目的地",
                       "出发时间", "到达时间", "座位号", "票价", "状态", "下单时间"])
@@ -823,8 +858,8 @@ def admin_orders_export():
 
     output.seek(0)
     return Response(
-        output.getvalue(),
-        mimetype="text/csv; charset=utf-8-sig",
+        output.getvalue().encode("utf-8"),
+        mimetype="text/csv; charset=utf-8",
         headers={"Content-Disposition": "attachment; filename=orders_export.csv"},
     )
 
@@ -835,10 +870,32 @@ def admin_orders_export():
 @admin_required
 def admin_users():
     page = request.args.get("page", 1, type=int)
-    pagination = User.query.order_by(User.created_at.desc()).paginate(
+    q_search = request.args.get("q", "").strip()
+    q_role = request.args.get("role", "").strip()
+
+    query = User.query
+    if q_search:
+        pattern = f"%{_escape_like(q_search)}%"
+        query = query.filter(
+            db.or_(
+                User.username.ilike(pattern, escape="\\"),
+                User.real_name.ilike(pattern, escape="\\"),
+                User.phone.ilike(pattern, escape="\\"),
+                User.email.ilike(pattern, escape="\\"),
+            )
+        )
+    if q_role == "admin":
+        query = query.filter_by(is_admin=True)
+    elif q_role == "user":
+        query = query.filter_by(is_admin=False)
+
+    pagination = query.order_by(User.created_at.desc()).paginate(
         page=page, per_page=20, error_out=False
     )
-    return render_template("admin/users.html", users=pagination.items, pagination=pagination)
+    return render_template(
+        "admin/users.html", users=pagination.items, pagination=pagination,
+        q_search=q_search, q_role=q_role,
+    )
 
 
 @app.route("/admin/users/<int:user_id>/toggle_admin", methods=["POST"])
