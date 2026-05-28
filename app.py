@@ -1,3 +1,5 @@
+import csv
+import io
 import secrets
 from functools import wraps
 from datetime import datetime, timedelta
@@ -5,14 +7,14 @@ from urllib.parse import urlparse, urljoin
 
 from flask import (
     Flask, render_template, request, redirect, url_for,
-    flash, jsonify, abort, session,
+    flash, jsonify, abort, session, Response,
 )
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from config import Config
-from models import db, User, Schedule, Order
+from models import db, User, Schedule, Order, Waitlist, Favorite
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -111,6 +113,41 @@ def _validate_schedule_form(form, schedule=None):
     except (ValueError, KeyError):
         errors.append("座位数格式不正确")
     return errors
+
+
+def _process_waitlist(schedule):
+    """After a seat becomes available, try to fulfill waiting list entries."""
+    waiting = Waitlist.query.filter_by(
+        schedule_id=schedule.id, status="waiting"
+    ).order_by(Waitlist.created_at).all()
+
+    for wl in waiting:
+        stmt = select(Schedule).where(
+            Schedule.id == schedule.id, Schedule.status == "active"
+        ).with_for_update()
+        sched = db.session.execute(stmt).scalar_one_or_none()
+        if not sched or sched.available_seats <= 0:
+            break
+
+        existing = Order.query.filter_by(
+            user_id=wl.user_id, schedule_id=sched.id,
+        ).filter(Order.order_status != "cancelled").first()
+        if existing:
+            wl.status = "cancelled"
+            continue
+
+        seat_number = sched.total_seats - sched.available_seats + 1
+        order = Order(
+            user_id=wl.user_id,
+            schedule_id=sched.id,
+            passenger_name=wl.passenger_name,
+            passenger_phone=wl.passenger_phone,
+            seat_number=seat_number,
+            price=sched.price,
+        )
+        sched.available_seats -= 1
+        wl.status = "fulfilled"
+        db.session.add(order)
 
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
@@ -220,6 +257,20 @@ def change_password():
 
 @app.route("/")
 def index():
+    # Popular routes: top routes by order count
+    popular_routes = (
+        db.session.query(
+            Schedule.departure, Schedule.destination,
+            func.count(Order.id).label("order_count"),
+        )
+        .join(Order, Order.schedule_id == Schedule.id)
+        .filter(Order.order_status == "paid")
+        .group_by(Schedule.departure, Schedule.destination)
+        .order_by(func.count(Order.id).desc())
+        .limit(6)
+        .all()
+    )
+
     page = request.args.get("page", 1, type=int)
     query = Schedule.query.filter(
         Schedule.status == "active",
@@ -227,7 +278,8 @@ def index():
         Schedule.departure_time > datetime.now(),
     ).order_by(Schedule.departure_time)
     pagination = query.paginate(page=page, per_page=20, error_out=False)
-    return render_template("index.html", schedules=pagination.items, pagination=pagination)
+    return render_template("index.html", schedules=pagination.items,
+                           pagination=pagination, popular_routes=popular_routes)
 
 
 @app.route("/search")
@@ -235,6 +287,7 @@ def search():
     departure = request.args.get("departure", "").strip()
     destination = request.args.get("destination", "").strip()
     date = request.args.get("date", "").strip()
+    sort = request.args.get("sort", "").strip()
 
     query = Schedule.query.filter(
         Schedule.status == "active",
@@ -255,10 +308,27 @@ def search():
         except ValueError:
             pass
 
+    if sort == "price_asc":
+        query = query.order_by(Schedule.price.asc(), Schedule.departure_time.asc())
+    elif sort == "price_desc":
+        query = query.order_by(Schedule.price.desc(), Schedule.departure_time.asc())
+    elif sort == "duration_asc":
+        query = query.order_by(
+            (Schedule.arrival_time - Schedule.departure_time).asc(),
+            Schedule.departure_time.asc(),
+        )
+    elif sort == "duration_desc":
+        query = query.order_by(
+            (Schedule.arrival_time - Schedule.departure_time).desc(),
+            Schedule.departure_time.asc(),
+        )
+    else:
+        query = query.order_by(Schedule.departure_time)
+
     page = request.args.get("page", 1, type=int)
-    pagination = query.order_by(Schedule.departure_time).paginate(page=page, per_page=20, error_out=False)
+    pagination = query.paginate(page=page, per_page=20, error_out=False)
     return render_template("search.html", schedules=pagination.items, pagination=pagination,
-                           departure=departure, destination=destination, date=date)
+                           departure=departure, destination=destination, date=date, sort=sort)
 
 
 # ── Booking ───────────────────────────────────────────────────────────────────
@@ -268,7 +338,12 @@ def schedule_detail(schedule_id):
     schedule = db.session.get(Schedule, schedule_id)
     if not schedule:
         abort(404)
-    return render_template("schedule_detail.html", schedule=schedule)
+    is_favorited = False
+    if current_user.is_authenticated:
+        is_favorited = Favorite.query.filter_by(
+            user_id=current_user.id, schedule_id=schedule_id
+        ).first() is not None
+    return render_template("schedule_detail.html", schedule=schedule, is_favorited=is_favorited)
 
 
 @app.route("/book/<int:schedule_id>", methods=["GET", "POST"])
@@ -356,9 +431,117 @@ def cancel_order(order_id):
 
     order.order_status = "cancelled"
     order.schedule.available_seats += 1
+    _process_waitlist(order.schedule)
     db.session.commit()
     flash("订单已取消", "success")
     return redirect(url_for("my_orders"))
+
+
+# ── Waitlist ──────────────────────────────────────────────────────────────────
+
+@app.route("/waitlist/<int:schedule_id>", methods=["GET", "POST"])
+@login_required
+def join_waitlist(schedule_id):
+    schedule = db.session.get(Schedule, schedule_id)
+    if not schedule or schedule.status != "active":
+        flash("该班次不可候补", "danger")
+        return redirect(url_for("index"))
+
+    existing = Waitlist.query.filter_by(
+        user_id=current_user.id, schedule_id=schedule_id, status="waiting"
+    ).first()
+    if existing:
+        flash("您已在候补队列中", "warning")
+        return redirect(url_for("schedule_detail", schedule_id=schedule_id))
+
+    existing_order = Order.query.filter_by(
+        user_id=current_user.id, schedule_id=schedule_id,
+    ).filter(Order.order_status != "cancelled").first()
+    if existing_order:
+        flash("您已预订过该班次", "warning")
+        return redirect(url_for("schedule_detail", schedule_id=schedule_id))
+
+    if request.method == "POST":
+        passenger_name = request.form.get("passenger_name", "").strip()
+        passenger_phone = request.form.get("passenger_phone", "").strip()
+        if not passenger_name or not passenger_phone:
+            flash("请填写乘车人信息", "danger")
+            return render_template("waitlist.html", schedule=schedule, form_data=dict(request.form))
+
+        wl = Waitlist(
+            user_id=current_user.id,
+            schedule_id=schedule_id,
+            passenger_name=passenger_name,
+            passenger_phone=passenger_phone,
+        )
+        db.session.add(wl)
+        db.session.commit()
+        flash("已加入候补队列，有票时将自动为您订票", "success")
+        return redirect(url_for("my_waitlist"))
+
+    return render_template("waitlist.html", schedule=schedule, form_data={})
+
+
+@app.route("/my_waitlist")
+@login_required
+def my_waitlist():
+    page = request.args.get("page", 1, type=int)
+    pagination = (
+        Waitlist.query.filter_by(user_id=current_user.id)
+        .order_by(Waitlist.created_at.desc())
+        .paginate(page=page, per_page=15, error_out=False)
+    )
+    return render_template("my_waitlist.html", waitlists=pagination.items,
+                           pagination=pagination, now=datetime.now())
+
+
+@app.route("/waitlist/<int:wl_id>/cancel", methods=["POST"])
+@login_required
+def cancel_waitlist(wl_id):
+    wl = db.session.get(Waitlist, wl_id)
+    if not wl or wl.user_id != current_user.id:
+        abort(403)
+    if wl.status != "waiting":
+        flash("该候补记录无法取消", "danger")
+        return redirect(url_for("my_waitlist"))
+    wl.status = "cancelled"
+    db.session.commit()
+    flash("候补已取消", "success")
+    return redirect(url_for("my_waitlist"))
+
+
+# ── Favorites ─────────────────────────────────────────────────────────────────
+
+@app.route("/favorites")
+@login_required
+def my_favorites():
+    page = request.args.get("page", 1, type=int)
+    pagination = (
+        Favorite.query.filter_by(user_id=current_user.id)
+        .order_by(Favorite.created_at.desc())
+        .paginate(page=page, per_page=20, error_out=False)
+    )
+    return render_template("my_favorites.html", favorites=pagination.items,
+                           pagination=pagination, now=datetime.now())
+
+
+@app.route("/schedule/<int:schedule_id>/favorite", methods=["POST"])
+@login_required
+def toggle_favorite(schedule_id):
+    schedule = db.session.get(Schedule, schedule_id)
+    if not schedule:
+        abort(404)
+    fav = Favorite.query.filter_by(
+        user_id=current_user.id, schedule_id=schedule_id
+    ).first()
+    if fav:
+        db.session.delete(fav)
+        flash("已取消收藏", "info")
+    else:
+        db.session.add(Favorite(user_id=current_user.id, schedule_id=schedule_id))
+        flash("已收藏", "success")
+    db.session.commit()
+    return redirect(url_for("schedule_detail", schedule_id=schedule_id))
 
 
 # ── Admin: Schedules ─────────────────────────────────────────────────────────
@@ -373,6 +556,7 @@ def admin_dashboard():
         "revenue": db.session.query(
             db.func.sum(Order.price)
         ).filter(Order.order_status == "paid").scalar() or 0,
+        "waitlist": Waitlist.query.filter_by(status="waiting").count(),
     }
     return render_template("admin/dashboard.html", stats=stats)
 
@@ -380,11 +564,40 @@ def admin_dashboard():
 @app.route("/admin/schedules")
 @admin_required
 def admin_schedules():
+    departure = request.args.get("departure", "").strip()
+    destination = request.args.get("destination", "").strip()
+    status = request.args.get("status", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+
+    query = Schedule.query
+    if departure:
+        query = query.filter(Schedule.departure.ilike(f"%{_escape_like(departure)}%", escape="\\"))
+    if destination:
+        query = query.filter(Schedule.destination.ilike(f"%{_escape_like(destination)}%", escape="\\"))
+    if status:
+        query = query.filter_by(status=status)
+    if date_from:
+        try:
+            d = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(Schedule.departure_time >= d)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            d = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(Schedule.departure_time < d)
+        except ValueError:
+            pass
+
     page = request.args.get("page", 1, type=int)
-    pagination = Schedule.query.order_by(Schedule.departure_time.desc()).paginate(
+    pagination = query.order_by(Schedule.departure_time.desc()).paginate(
         page=page, per_page=20, error_out=False
     )
-    return render_template("admin/schedules.html", schedules=pagination.items, pagination=pagination)
+    return render_template("admin/schedules.html", schedules=pagination.items,
+                           pagination=pagination, departure=departure,
+                           destination=destination, status=status,
+                           date_from=date_from, date_to=date_to)
 
 
 @app.route("/admin/schedules/new", methods=["GET", "POST"])
@@ -457,6 +670,13 @@ def admin_schedule_cancel(schedule_id):
     for order in paid_orders:
         order.order_status = "cancelled"
 
+    # Cancel all waiting waitlist entries
+    waiting = Waitlist.query.filter_by(
+        schedule_id=schedule_id, status="waiting"
+    ).all()
+    for wl in waiting:
+        wl.status = "cancelled"
+
     schedule.status = "cancelled"
     db.session.commit()
     msg = "班次已取消"
@@ -466,16 +686,74 @@ def admin_schedule_cancel(schedule_id):
     return redirect(url_for("admin_schedules"))
 
 
+@app.route("/admin/schedules/<int:schedule_id>/copy", methods=["POST"])
+@admin_required
+def admin_schedule_copy(schedule_id):
+    schedule = db.session.get(Schedule, schedule_id)
+    if not schedule:
+        abort(404)
+
+    new_total = schedule.total_seats
+    copy = Schedule(
+        departure=schedule.departure,
+        destination=schedule.destination,
+        departure_time=schedule.departure_time,
+        arrival_time=schedule.arrival_time,
+        price=schedule.price,
+        total_seats=new_total,
+        available_seats=new_total,
+    )
+    db.session.add(copy)
+    db.session.commit()
+    flash(f"班次已复制为新班次 #{copy.id}", "success")
+    return redirect(url_for("admin_schedule_edit", schedule_id=copy.id))
+
+
 # ── Admin: Orders ─────────────────────────────────────────────────────────────
 
 @app.route("/admin/orders")
 @admin_required
 def admin_orders():
+    keyword = request.args.get("keyword", "").strip()
+    order_status = request.args.get("status", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+
+    query = Order.query
+    if keyword:
+        kw = f"%{_escape_like(keyword)}%"
+        query = query.join(Schedule).join(User).filter(
+            db.or_(
+                User.username.ilike(kw, escape="\\"),
+                Order.passenger_name.ilike(kw, escape="\\"),
+                Order.passenger_phone.ilike(kw, escape="\\"),
+                Schedule.departure.ilike(kw, escape="\\"),
+                Schedule.destination.ilike(kw, escape="\\"),
+            )
+        )
+    if order_status:
+        query = query.filter(Order.order_status == order_status)
+    if date_from:
+        try:
+            d = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(Order.created_at >= d)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            d = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(Order.created_at < d)
+        except ValueError:
+            pass
+
     page = request.args.get("page", 1, type=int)
-    pagination = Order.query.order_by(Order.created_at.desc()).paginate(
+    pagination = query.order_by(Order.created_at.desc()).paginate(
         page=page, per_page=20, error_out=False
     )
-    return render_template("admin/orders.html", orders=pagination.items, pagination=pagination)
+    return render_template("admin/orders.html", orders=pagination.items,
+                           pagination=pagination, keyword=keyword,
+                           order_status=order_status,
+                           date_from=date_from, date_to=date_to)
 
 
 @app.route("/admin/orders/<int:order_id>/status", methods=["POST"])
@@ -490,11 +768,65 @@ def admin_order_status(order_id):
         order.order_status = new_status
         if new_status == "cancelled" and old_status != "cancelled":
             order.schedule.available_seats += 1
+            _process_waitlist(order.schedule)
         elif new_status == "paid" and old_status == "cancelled":
             order.schedule.available_seats -= 1
         db.session.commit()
         flash("订单状态已更新", "success")
     return redirect(url_for("admin_orders"))
+
+
+@app.route("/admin/orders/export")
+@admin_required
+def admin_orders_export():
+    query = Order.query
+    order_status = request.args.get("status", "").strip()
+    date_from = request.args.get("date_from", "").strip()
+    date_to = request.args.get("date_to", "").strip()
+    if order_status:
+        query = query.filter(Order.order_status == order_status)
+    if date_from:
+        try:
+            d = datetime.strptime(date_from, "%Y-%m-%d")
+            query = query.filter(Order.created_at >= d)
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            d = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(Order.created_at < d)
+        except ValueError:
+            pass
+
+    orders = query.order_by(Order.created_at.desc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["订单号", "用户", "乘车人", "手机号", "出发地", "目的地",
+                      "出发时间", "到达时间", "座位号", "票价", "状态", "下单时间"])
+    status_map = {"paid": "已支付", "used": "已使用", "cancelled": "已取消"}
+    for o in orders:
+        writer.writerow([
+            o.id,
+            o.user.username,
+            o.passenger_name,
+            o.passenger_phone,
+            o.schedule.departure,
+            o.schedule.destination,
+            o.schedule.departure_time.strftime("%Y-%m-%d %H:%M"),
+            o.schedule.arrival_time.strftime("%Y-%m-%d %H:%M"),
+            o.seat_number,
+            f"{o.price:.2f}",
+            status_map.get(o.order_status, o.order_status),
+            o.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+        ])
+
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype="text/csv; charset=utf-8-sig",
+        headers={"Content-Disposition": "attachment; filename=orders_export.csv"},
+    )
 
 
 # ── Admin: Users ──────────────────────────────────────────────────────────────

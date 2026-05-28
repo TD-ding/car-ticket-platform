@@ -24,5 +24,9 @@
         <div class="stat-value">¥{{ "%.2f"|format(stats.revenue) }}</div>
         <div class="stat-label">累计营收</div>
     </div>
+    <div class="stat-card">
+        <div class="stat-value">{{ stats.waitlist }}</div>
+        <div class="stat-label">候补中</div>
+    </div>
 </div>
 {% endblock %}

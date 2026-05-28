@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% from "_pagination.html" import render_pagination %}
+
+{% block title %}我的候补 - 汽车订票平台{% endblock %}
+
+{% block content %}
+<h2>我的候补</h2>
+
+{% if waitlists %}
+<div class="table-responsive"><table class="table">
+    <thead>
+        <tr>
+            <th>路线</th>
+            <th>出发时间</th>
+            <th>乘车人</th>
+            <th>手机号</th>
+            <th>状态</th>
+            <th>候补时间</th>
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for wl in waitlists %}
+        <tr>
+            <td>{{ wl.schedule.departure }} → {{ wl.schedule.destination }}</td>
+            <td>{{ wl.schedule.departure_time.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>{{ wl.passenger_name }}</td>
+            <td>{{ wl.passenger_phone }}</td>
+            <td>
+                {% if wl.status == 'waiting' %}
+                    <span class="badge badge-warning">等待中</span>
+                    {% set queue_pos = namespace(val=0) %}
+                {% elif wl.status == 'fulfilled' %}
+                    <span class="badge badge-success">已出票</span>
+                {% else %}
+                    <span class="badge badge-danger">已取消</span>
+                {% endif %}
+            </td>
+            <td>{{ wl.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+            <td>
+                {% if wl.status == 'waiting' %}
+                <form method="post" action="{{ url_for('cancel_waitlist', wl_id=wl.id) }}"
+                      onsubmit="return confirm('确定要取消候补吗？')">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-sm btn-danger">取消候补</button>
+                </form>
+                {% elif wl.status == 'fulfilled' %}
+                <a href="{{ url_for('my_orders') }}" class="btn btn-sm btn-outline">查看订单</a>
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table></div>
+{{ render_pagination(pagination) }}
+{% else %}
+<p class="text-center">暂无候补记录，去<a href="{{ url_for('index') }}">首页</a>看看吧</p>
+{% endif %}
+{% endblock %}

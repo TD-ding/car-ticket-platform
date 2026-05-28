@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% set fv = form_data or {} %}
+{% block title %}候补订票 - {{ schedule.departure }} → {{ schedule.destination }}{% endblock %}
+
+{% block content %}
+<div class="booking-card">
+    <h2>候补订票</h2>
+    <div class="booking-schedule">
+        <p><strong>{{ schedule.departure }} → {{ schedule.destination }}</strong></p>
+        <p>出发: {{ schedule.departure_time.strftime('%Y-%m-%d %H:%M') }} |
+           到达: {{ schedule.arrival_time.strftime('%H:%M') }} |
+           行程: {{ schedule.departure_time|duration(schedule.arrival_time) }}</p>
+        <p>票价: <span class="price">¥{{ schedule.price }}</span> | 余票: <span class="text-danger">0（已售罄）</span></p>
+        <p class="text-danger">该班次已满，加入候补队列后，有人取消将自动为您订票。</p>
+    </div>
+
+    <form method="post">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <div class="form-group">
+            <label>乘车人姓名</label>
+            <input type="text" name="passenger_name" required placeholder="请输入真实姓名"
+                   value="{{ fv.get('passenger_name', current_user.real_name if current_user.real_name else '') }}">
+        </div>
+        <div class="form-group">
+            <label>手机号码</label>
+            <input type="text" name="passenger_phone" required placeholder="请输入手机号码"
+                   value="{{ fv.get('passenger_phone', current_user.phone if current_user.phone else '') }}">
+        </div>
+        <button type="submit" class="btn btn-warning btn-lg">加入候补</button>
+        <a href="{{ url_for('schedule_detail', schedule_id=schedule.id) }}" class="btn btn-outline ml-1">返回</a>
+    </form>
+</div>
+{% endblock %}

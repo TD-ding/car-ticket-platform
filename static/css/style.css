@@ -518,3 +518,53 @@ a:hover { color: #3451d1; }
     color: #999;
     cursor: not-allowed;
 }
+
+/* ── Popular Routes ─────────────────────────────────────────────────────────── */
+.popular-routes {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: .75rem;
+    margin-bottom: 2rem;
+}
+
+.route-card {
+    background: #fff;
+    padding: 1rem 1.2rem;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    text-align: center;
+    color: inherit;
+    transition: transform .15s, box-shadow .15s;
+}
+.route-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0,0,0,.1);
+    text-decoration: none;
+    color: inherit;
+}
+.route-name {
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: #1a1a2e;
+    margin-bottom: .25rem;
+}
+.route-orders {
+    font-size: .85rem;
+    color: #888;
+}
+
+/* ── Detail Header ──────────────────────────────────────────────────────────── */
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+.detail-header h2 { margin-bottom: 0; }
+
+/* ── Favorite Actions (my_favorites page) ───────────────────────────────────── */
+.fav-actions {
+    display: flex;
+    gap: .4rem;
+    align-items: center;
+}
