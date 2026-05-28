@@ -7,7 +7,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from config import Config
 from models import db, User, Schedule, Order
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 app.config.from_object(Config)
@@ -118,7 +118,7 @@ def search():
     if date:
         try:
             d = datetime.strptime(date, "%Y-%m-%d")
-            next_day = datetime(d.year, d.month, d.day + 1) if d.day < 28 else d.replace(day=28)
+            next_day = d + timedelta(days=1)
             query = query.filter(
                 Schedule.departure_time >= d,
                 Schedule.departure_time < next_day,
