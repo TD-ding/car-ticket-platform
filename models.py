@@ -15,7 +15,7 @@ class User(UserMixin, db.Model):
     phone = db.Column(db.String(20), default="")
     email = db.Column(db.String(120), default="")
     is_admin = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     orders = db.relationship("Order", backref="user", lazy=True)
     favorites = db.relationship("Favorite", backref="user", lazy=True,
@@ -42,6 +42,10 @@ class Schedule(db.Model):
     favorites = db.relationship("Favorite", backref="schedule", lazy=True,
                                 cascade="all, delete-orphan")
 
+    @property
+    def sold_seats(self):
+        return self.total_seats - self.available_seats
+
 
 class Order(db.Model):
     __tablename__ = "orders"
@@ -54,7 +58,7 @@ class Order(db.Model):
     seat_number = db.Column(db.Integer, nullable=False)
     price = db.Column(db.Float, nullable=False, default=0)
     order_status = db.Column(db.String(20), default="paid")  # paid / cancelled / used
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
 
 class Waitlist(db.Model):
@@ -66,7 +70,7 @@ class Waitlist(db.Model):
     passenger_name = db.Column(db.String(80), nullable=False)
     passenger_phone = db.Column(db.String(20), nullable=False)
     status = db.Column(db.String(20), default="waiting")  # waiting / fulfilled / cancelled
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     __table_args__ = (
         db.Index("ix_waitlist_schedule_status", "schedule_id", "status"),
@@ -79,7 +83,7 @@ class Favorite(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
     schedule_id = db.Column(db.Integer, db.ForeignKey("schedules.id"), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
 
     __table_args__ = (
         db.UniqueConstraint("user_id", "schedule_id", name="uq_user_schedule"),
