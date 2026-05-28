@@ -1,6 +1,6 @@
 """Seed the database with sample data."""
 from app import app, db, _migrate_db
-from models import User, Schedule, Order
+from models import User, Schedule
 from werkzeug.security import generate_password_hash
 from datetime import datetime, timedelta
 import random

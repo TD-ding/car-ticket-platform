@@ -837,8 +837,10 @@ def admin_orders_export():
     output = io.StringIO()
     output.write("﻿")
     writer = csv.writer(output)
-    writer.writerow(["订单号", "用户", "乘车人", "手机号", "出发地", "目的地",
-                      "出发时间", "到达时间", "座位号", "票价", "状态", "下单时间"])
+    writer.writerow([
+        "订单号", "用户", "乘车人", "手机号", "出发地", "目的地",
+        "出发时间", "到达时间", "座位号", "票价", "状态", "下单时间",
+    ])
     status_map = {"paid": "已支付", "used": "已使用", "cancelled": "已取消"}
     for o in orders:
         writer.writerow([
