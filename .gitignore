@@ -1,7 +1,12 @@
 __pycache__/
 *.pyc
+*.pyo
 instance/
 *.db
 .env
 .secret_key
 venv/
+.pytest_cache/
+*.egg-info/
+dist/
+build/
