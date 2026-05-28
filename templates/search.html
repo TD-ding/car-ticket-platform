@@ -29,7 +29,7 @@
 {% if schedules %}
 <div class="schedule-list">
     {% for s in schedules %}
-    <div class="schedule-card" onclick="location.href='{{ url_for('schedule_detail', schedule_id=s.id) }}'">
+    <a href="{{ url_for('schedule_detail', schedule_id=s.id) }}" class="schedule-card">
         <div class="schedule-route">
             <span class="city">{{ s.departure }}</span>
             <span class="arrow">→</span>
@@ -42,7 +42,7 @@
                 余票: {{ s.available_seats }}
             </span>
         </div>
-    </div>
+    </a>
     {% endfor %}
 </div>
 {{ render_pagination(pagination) }}
